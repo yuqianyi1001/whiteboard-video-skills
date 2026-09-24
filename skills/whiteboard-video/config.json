@@ -5,11 +5,17 @@
     "_note": "projects = 每期内容目录（人看、人改的：scenes.js、场景图、贴纸、旁白稿、字幕、封面、README、发布.md），可以指到 Obsidian 仓库里；build = 后台目录，每期 <期>/work/ 放中间产物（音频/逐帧/分段 mp4），<期>/outputs/final.mp4 是成片。相对路径以本仓库根目录为准，~ 表示家目录"
   },
   "tts": {
-    "engine": "volc",
+    "model": "",
     "voice": "",
-    "resourceId": "",
-    "speed": 1.2,
-    "_note": "voice 留空就读 .env 的 VOLC_TTS_VOICE。官方音色配 resourceId seed-tts-1.0（或按控制台提示的 2.0 资源 ID）；声音复刻音色配 volc.megatts.default。留空就读 .env 的 VOLC_TTS_RESOURCE_ID。speed=语速倍率（1=原速，1.2 推荐；映射到火山 speech_rate=(speed-1)*100，范围 0.5~2，原生合成不变调），改了会自动重配所有场景（缓存键含语速）"
+    "voiceEnv": "BAILIAN_TTS_VOICE",
+    "speed": 1.1,
+    "loudness": -16,
+    "truePeak": -1.5,
+    "sentenceGap": 0.12,
+    "beatGap": 0.3,
+    "parallel": 4,
+    "pronunciation": [],
+    "_note": "旁白用阿里云百炼千问 Qwen-TTS（lib/tts-bailian.mjs）。model 留空读 .env 的 BAILIAN_TTS_MODEL（如 qwen3-tts-flash；声音复刻音色要配对应的 qwen3-tts-vc-* 模型）；voice 留空读 voiceEnv 指定的环境变量（默认 BAILIAN_TTS_VOICE）；API key 读 DASHSCOPE_API_KEY。speed=合成后 atempo 变速倍率（不变调，改了按新倍率重算）；loudness=目标响度 LUFS，全期统一增益，truePeak=限幅 dBTP；sentenceGap/beatGap=句间/段间静音秒数；parallel=并发请求数；pronunciation=多音字同音替换 [[\"原词\",\"替换\"],...]，只改送 TTS 的文本，字幕仍用原文"
   },
   "bgm": {
     "file": "assets/bgm.mp3",

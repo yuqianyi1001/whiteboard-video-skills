@@ -1,5 +1,5 @@
 """备胎旁白：edge-tts（微软在线 TTS）。用法: python3 lib/tts-edge.py <projectDir> [scene...]
-输出 <project>/audio/<scene>.mp3 和 .json。正式出片用火山克隆音 lib/tts-volc.mjs。
+输出 <project>/audio/<scene>.mp3 和 .json。正式出片用千问 Qwen-TTS lib/tts-bailian.mjs。
 """
 import asyncio, json, os, subprocess, sys
 import edge_tts

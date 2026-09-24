@@ -20,14 +20,14 @@
 ## 流程
 
 ```
-调查写稿 → 火山 TTS 配音（逐字时间戳）→ 逐段素材覆盖表 → Remotion 合成
+调查写稿 → 千问 TTS 配音（按句合成，逐字时间）→ 逐段素材覆盖表 → Remotion 合成
     → FFmpeg 侧链闪避混音 → 机器验收 → 3:4 / 4:3 封面 → 八平台文案 + 校验
 ```
 
 几条核心设计：
 
 - **事实链先于稿件。** 每条判断有出处和日期，同一份记录既是来源台账也是被投诉时的申诉材料。
-- **字幕时间戳直接来自 TTS。** 火山 `enable_subtitle` 返回每个字的起止毫秒，字幕对齐是数据处理，不跑语音识别。
+- **字幕时间直接来自 TTS。** 千问 TTS 按句合成，句子时长真实、句内按字数均分，字幕对齐是数据处理，不跑语音识别。
 - **真实动态影像不够不开始渲染。** 合成前必须先出逐段素材覆盖表，缺口段落先补素材。
 - **六种叙事类型轮换，连续两期不重样。** 账目、代价、规则、过程、对照、身份，各自对应不同的 MG 形态。
 - **时间预算写死。** 花字、短句、证据截图各自有最短纯阅读时间，进出场动画不算在内。
@@ -43,9 +43,9 @@
 | `assets/brand-stamp.py` | 封面字标固定合成：右上角，宽 22%，右距 4%，上距 3%，`--text` 传签名 |
 | `assets/check-publish-copy.py` | 八平台文案校验 |
 | `assets/publishing-reference/` | 八平台文案模板 |
-| `scripts/tts.mjs` `scripts/tts-s20.mjs` | 火山 TTS 合成，1.2 倍速，带逐字时间戳与缓存 |
+| `scripts/tts.mjs` `scripts/tts-s20.mjs` | 千问 TTS 合成，1.2 倍速，带逐字时间与缓存 |
 | `scripts/make-sentences.py` | 口播稿切句 |
-| `scripts/subtitles-volc.py` | 逐字时间戳生成字幕 |
+| `scripts/subtitles.py` | 逐字时间生成字幕 |
 | `scripts/mix-bgm.sh` | 旁白响度归一后混入侧链闪避配乐，视频流不重编码 |
 | `scripts/clipcheck.py` `scripts/qa.py` | 素材抽帧精查、成片机器验收 |
 | `template/remotion/` | 最小 Remotion 参考工程，含时间轴、字体和一段样例素材 |
@@ -64,7 +64,7 @@
 
 Remotion 和 React 版本不要升。升级后出现过动画节奏错乱、布局漂移和黑帧，固定这组版本后全部消失。
 
-火山引擎凭证放在本 skill 目录（`skills/investigation-video/`）的 `.env`，字段见 `.env.example`。仓库不附带配乐，`scripts/mix-bgm.sh` 默认读 `assets/bgm.mp3`，自备一段无版权音乐。
+阿里云百炼（千问 TTS）凭证放在本 skill 目录（`skills/investigation-video/`）的 `.env`，字段见 `.env.example`。仓库不附带配乐，`scripts/mix-bgm.sh` 默认读 `assets/bgm.mp3`，自备一段无版权音乐。
 
 ## 使用
 
@@ -83,7 +83,7 @@ AI 会按 `SKILL.md` 走完全流程。中途任何阶段都能停下人工介�
 | --- | --- | --- |
 | `tts.mjs` + `lib/`、`tts-s20.mjs` | `work/production/` | 工程根目录 `.env` |
 | `make-sentences.py` | `work/production/` | 口播稿 markdown（作为参数传入），输出 `sentences.json` |
-| `subtitles-volc.py` | `work/production/` | `audio-manifest-s20.json`、`renderer/timeline.json` |
+| `subtitles.py` | `work/production/` | `audio-manifest-s20.json`、`renderer/timeline.json` |
 | `clipcheck.py`、`qa.py` | `work/production/` | `renderer/timeline.json`、`renderer/public/assets/`、`renders/` |
 | `mix-bgm.sh` | `work/production/` | `renderer/public/narration.wav`、`assets/bgm.mp3` |
 | `assets/BrandStamp.jsx` | `work/production/renderer/` | Remotion 工程 |

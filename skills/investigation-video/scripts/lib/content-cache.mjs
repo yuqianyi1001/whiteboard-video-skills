@@ -43,10 +43,9 @@ export function writeAudioCache(file, key, audio) {
 }
 export function ttsIdentity(text, voice, env = process.env) {
   if (env.TTS_ENGINE === 'say') return { version: 1, text, engine: 'say', voice: env.SAY_VOICE || 'Tingting', rate: env.SAY_RATE || '200', wav: '24000-mono' };
-  return { version: 1, text, engine: 'volc', resource: env.VOLC_TTS_RESOURCE_ID || 'seed-tts-1.0',
-    speaker: voice?.includes('_') ? voice : env.VOLC_TTS_VOICE || 'zh_female_shuangkuaisisi_moon_bigtts',
-    speed: Number(env.VOLC_TTS_SPEED || 0), style: env.VOLC_TTS_STYLE || '',
-    format: 'mp3', sampleRate: 24000, bitRate: 128000, timestamp: true, wav: '44100-stereo' };
+  return { version: 2, text, engine: 'bailian', model: env.BAILIAN_TTS_MODEL || 'qwen3-tts-flash',
+    voice: voice || env.BAILIAN_TTS_VOICE || '', speed: Number(env.BAILIAN_TTS_SPEED || 1),
+    sentenceGap: 0.12, wav: '44100-stereo' };
 }
 
 // 总管线与逐镜缓存都看内容；产物缺失/被替换不能被 manifest 的旧状态掩盖。

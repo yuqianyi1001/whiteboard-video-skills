@@ -18,7 +18,7 @@
 ## 2. 稿件与配音
 
 - 稿头写叙事自检（类型、上两期、黑名单、去金额测试、MG 形态、结尾回应）。句子编号 `sNNN`，插句用 `sNNNa`，不重排已配音句。
-- `sentences.json` 由稿件正则生成；TTS 复制上一期 `tts-s20.mjs`：刘飞音色、`VOLC_TTS_SPEED=20`，产出 `audio-s20/` 与 `audio-manifest-s20.json`。改动句子时只删对应 wav/json 重跑，脚本会跳过已存在文件。
+- `sentences.json` 由稿件正则生成；TTS 复制上一期 `tts-s20.mjs`：`.env` 的 `BAILIAN_TTS_VOICE` 音色、`BAILIAN_TTS_SPEED=1.2`，产出 `audio-s20/` 与 `audio-manifest-s20.json`。改动句子时只删对应 wav/json 重跑，脚本会跳过已存在文件。
 - 试听用无停顿拼接 mp3 发给用户。时长门槛按 1.2 倍速算：约 0.156 秒/字，10 分钟正文需 3800 字以上。
 
 ## 3. 事实核查与证据
@@ -43,7 +43,7 @@
 
 ## 6. 字幕、渲染、混音、验收
 
-- **字幕时间戳直接来自火山**：`scripts/tts.mjs` 已在 `audio_params` 同时开 `enable_timestamp`（1.0 音色）与 `enable_subtitle`（2.0 音色，刘飞属此类），每句 json 的 `words` 为逐字 `{word,startTime,endTime}`，按原文打轴，1.2 倍速下准确。用 skill `scripts/subtitles-volc.py`（复制到工程）对齐：有 words 的句子直接用，没有的回退 whisper。2026-09-14 之前合成的音频没有 words，需要重合成或走 whisper。
+- **字幕时间来自 TTS 合成本身**：千问 TTS 不返回逐字时间戳，`scripts/tts.mjs` 把每段旁白按句（。？！；）分别合成，句子时长是真实的，句内按字数均分，写进每句 json 的 `words`（逐字 `{word,startTime,endTime}`，已按倍速换算）。用 skill `scripts/subtitles.py`（复制到工程）对齐：有 words 的句子直接用，没有的回退 whisper。需要字级精准卡点（如卡拉 OK 高亮）时再对该句跑 whisper。
 - whisper 只作回退：`python3` asr.py`（Homebrew Python 升级会丢 mlx_whisper，venv 用 `/opt/homebrew/bin/python3.13` 建）。数字密集句编辑率 0.5 左右可接受，字符校验必须通过。
 - 旁白：句音频直接 concat（不插停顿），`loudnorm=I=-16:TP=-1.5:LRA=11` 后放 `renderer/public/narration.wav`。
 - 渲染：复制上一期 `renderer/`（index.jsx、SimonTalkBrand.jsx、render.mjs、public 字体），`node_modules` 软链到已有依赖目录（public 内不可用软链）。整片约 40 分钟，后台跑并用 until-grep 等 `RENDER_DONE`。
