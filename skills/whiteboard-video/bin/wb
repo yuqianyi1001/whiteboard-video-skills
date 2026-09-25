@@ -16,6 +16,8 @@
 #   <期> 可以是目录名、标题或日期的任意子串，如 wb build 薄肌
 set -e
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[ -n "$WB_CONFIG" ] && export WB_CONFIG="$(cd "$(dirname "$WB_CONFIG")" && pwd)/$(basename "$WB_CONFIG")"   # 外部配置，见 lib/paths.cjs
+export WB_ROOT="$ROOT"   # 期目录 scenes.js 用它找 lib/scene-dsl
 cd "$ROOT"
 PROJECTS=$(node -p "require('./lib/paths.cjs').PROJECTS_DIR")
 resolve() { node -p "require('./lib/paths.cjs').resolveProject(process.argv[1])" "$1"; }

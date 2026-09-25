@@ -106,6 +106,7 @@ bin/wb build 计划                         # 出片
 - **声音**：`.env` 的 `BAILIAN_TTS_VOICE`（官方音色如 `Cherry`，配 `BAILIAN_TTS_MODEL=qwen3-tts-flash`）；声音复刻音色填复刻得到的音色 ID，模型填复刻时对应的 `qwen3-tts-vc-*`。
 - **配乐**：仓库不附带音乐。放一首无版权音乐到 `assets/bgm.mp3`，或改 `config.json` 的 `bgm.file`；没有配乐就出无配乐成片。
 - **目录**：`config.json` → `dirs.projects` 可以指到你的 Obsidian 仓库里，每期文件夹就能在 Obsidian 里直接看、直接改场景图。
+- **在别的仓库里放期目录**：不想改本仓库的 `config.json`，就在自己的仓库放一份只写差异字段的 config（如 `dirs`、`brand`、`tts.pronunciation`），运行时 `WB_CONFIG=<那份 config.json> bin/wb build <期>`。它按字段覆盖默认配置，里面的相对路径以那份文件所在目录为准。
 - **封面标签**：`cover.seriesTag`。
 - **发布文案口吻与话题**：`references/publish.md`、`templates/发布.md`。
 
