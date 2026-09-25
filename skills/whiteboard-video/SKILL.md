@@ -1,6 +1,6 @@
 ---
 name: whiteboard-video
-description: 手绘白板风"边画边讲"讲解视频出片 skill（Excalidraw 风格逐笔动画 + 火山引擎配音 + 烧录字幕 + 品牌水印与片尾卡 + 横竖两张封面 + 各平台发布文案）。当用户说"做一期白板视频 / 边画边讲 / 手绘讲解视频 / 用 excalidraw 做视频 / whiteboard video"，或要在本仓库里新建一期、改场景、换贴纸或真实 Logo、重出片、改字幕、出封面、写发布文案时使用。全链路本地：Playwright + ffmpeg + 火山 TTS + 本地 codex CLI 生图，不需要剪辑软件。
+description: 手绘白板风"边画边讲"讲解视频出片 skill（Excalidraw 风格逐笔动画 + 千问 TTS 配音 + 烧录字幕 + 品牌水印与片尾卡 + 横竖两张封面 + 各平台发布文案）。当用户说"做一期白板视频 / 边画边讲 / 手绘讲解视频 / 用 excalidraw 做视频 / whiteboard video"，或要在本仓库里新建一期、改场景、换贴纸或真实 Logo、重出片、改字幕、出封面、写发布文案时使用。全链路本地：Playwright + ffmpeg + 千问 TTS + 本地 codex CLI 生图，不需要剪辑软件。
 ---
 
 # whiteboard-video：白板讲解视频出片
@@ -11,9 +11,9 @@ description: 手绘白板风"边画边讲"讲解视频出片 skill（Excalidraw 
 
 ## 硬规矩
 
-1. **全链路本地。** 旁白走火山引擎语音合成（凭证在 `<仓库>/.env`，音色可以是官方音色或你自己的声音复刻），语速默认 1.2 倍原生合成；贴纸走本地 `codex` CLI 生图；真实 Logo 走 Wikimedia Commons 官方 SVG（`wb logo`）；配乐放 `assets/bgm.mp3`，没有就出无配乐成片。改配置不改代码。
+1. **全链路本地。** 旁白走阿里云百炼千问 Qwen-TTS（凭证在 `<仓库>/.env`，音色可以是官方音色或你自己的声音复刻），按句合成后默认 1.1 倍不变调变速、全期统一响度；贴纸走本地 `codex` CLI 生图；真实 Logo 走 Wikimedia Commons 官方 SVG（`wb logo`）；配乐放 `assets/bgm.mp3`，没有就出无配乐成片。改配置不改代码。
 2. **一处为主。** 期目录就是工程目录，`scenes.js` 是唯一手写源（旁白、场景、封面都在里面）；`scenes/`、`旁白稿.md`、`字幕.srt`、`封面-*.png` 是生成物，不手改、不外拷。`README.md`（资料来源）和 `发布.md`（文案）是人写的。视频不放进期目录：成片在 `<dirs.build>/<期>/outputs/final.mp4`，中间产物在同目录 `work/`，`旁白稿.md` 里自动带成片链接。
-3. **先旁白后画面。** 旁白按 `|` 切 beat，每 beat 3~4 句配一组元素；6~8 个场景，成片 2~2.5 分钟（1.2 倍语速下约 500~600 字）。
+3. **先旁白后画面。** 旁白按 `|` 切 beat，每 beat 3~4 句配一组元素；6~8 个场景，成片 2~2.5 分钟（约 500~600 字）。
 4. **画布 1920×1080。y≥960 是字幕区，右上 320×130 是水印区**，元素不进去；`wb scenes` 的 ⚠ 必须清零。
 5. **公司、产品、模型用真实 Logo；人物、器械、物件用贴纸；文字、箭头、框用 Excalidraw。** 讲到具体公司时主角用官方 Logo（`wb logo`），不用生图拟人机器人代指，观众认不出是谁。讲到具体公众人物时用真人照片参考的漫画像（`wb image ... --ref=照片 --likeness`，见 `references/stickers.md`），不用通用小人代指。Excalidraw 画人很丑，人和物件一律出贴纸。
 6. **事实先查再写。** 数字、日期、价格要有来源，写进期目录 `README.md`；估算值在旁白和文案里都标"据报道/估算"。查证动作见 `../video-common/references/fact-check.md`。
@@ -44,7 +44,7 @@ $W build "<标题>"                        # scenes → tts → render → mix �
 ### 2. 写旁白（scenes.js）
 - 口语短句，每句一个信息点。数字用中文读法利于 TTS（"三百美元"）；字幕用原文，所以阿拉伯数字也行，但 `@`、`iOS` 这类 TTS 会念歪的词要斟酌。
 - 结构：开场定义/反差 → 分解（三要素/两列对比/时间线）→ 怎么算/怎么做 → 数字与门槛 → 冷水/边界 → 一句话总结 + 评论区问题。
-- 每个 beat 都要有能画出来的东西，抽象句并入相邻 beat。按原速写即可，成片语速 1.2 倍。
+- 每个 beat 都要有能画出来的东西，抽象句并入相邻 beat。按原速写即可，成片语速 1.1 倍。
 
 ### 3. 出 Logo 与贴纸
 - **先列本期出现的公司/产品/模型 → `wb logo`。** `wb logo --search="<公司> logo"` 看 Commons 候选，挑官方现行版（带年份的取最新），一期一条命令取齐：标志（`logo-<名>`，方形，放主视觉）+ 字标（`logo-<名>-word`，横长，当标签/表头）；两家对比再加 `--vs=a,b` 出 `logos-vs.png` 当封面主图。来源自动记在 `assets/logos.json`，抄进 README「画面素材」。Commons 没有的，去官网 press kit / brand 页找 SVG，确认授权再下载。
@@ -81,7 +81,7 @@ $W build "<标题>"                        # scenes → tts → render → mix �
 | 换贴纸 / 人物太丑 | `wb image` 重出 → `wb stills` → `wb render && wb mix`（封面用到的话再 `wb cover`） |
 | 画得太快/太慢、文字蹦出来 | config `render.pen`：`speed` 描边 px/s、`charSeconds` 每字秒数区间、`minSeconds` 单元素下限、`gapSeconds` 抬笔间隙 → `wb render && wb mix` |
 | 渲染太慢 / 机器吃紧 | config `render.workers`（默认 4 路，每路一个 Chromium；1 = 串行），出帧与路数无关、逐帧一致 |
-| 语速快/慢 | config `tts.speed`（默认 1.2）→ `wb build`，全部场景自动重配、字幕同步 |
+| 语速快/慢 | config `tts.speed`（默认 1.1）→ `wb build`，全部场景按新倍率重算、字幕同步 |
 | 配乐大/小 | config `bgm.gain` → `wb mix`；临时试听 `wb mix <期> 0.4` |
 | 字幕字号/位置 | config `captions.fontSize / baselineY` → `wb render && wb mix` |
 | 水印位置/关掉/换 logo | config `brand.watermark.position/enabled`、`brand.logo`（透明底 png）→ `wb render && wb mix` |
@@ -89,14 +89,14 @@ $W build "<标题>"                        # scenes → tts → render → mix �
 | 封面文案 / 贴纸 / 画幅 | `scenes.js` 末尾 cover 函数 → `wb cover`；画幅 config `cover.ratios`，标签 `cover.seriesTag`（`tag: ''` 去掉） |
 | 标题 / 发布文案 / 换平台 | 改 `发布.md`，不用重出片 |
 | 在 Obsidian 里改了图 | `wb render && wb mix` 直接读 `.excalidraw.md`；增删元素会改逐笔顺序，结构性改动回 `scenes.js` |
-| 换声线 / 换曲 | `.env` 的 `VOLC_TTS_VOICE` 或 config `tts.voice`（声音复刻音色配 `resourceId: volc.megatts.default`）/ `assets/bgm.mp3`（换曲先 volumedetect 量电平再定 gain） |
+| 换声线 / 换曲 | `.env` 的 `BAILIAN_TTS_VOICE` 或 config `tts.voice`（声音复刻音色要配复刻时对应的 `qwen3-tts-vc-*` 模型，填 `BAILIAN_TTS_MODEL` 或 `tts.model`）；多音字读错用 `tts.pronunciation` 同音替换/ `assets/bgm.mp3`（换曲先 volumedetect 量电平再定 gain） |
 | 换账号品牌 | config `brand.name/accent/slogan`，其余不动 |
 
 ## 已知坑
 
 - Logo：很多官网有验证页拦截，Logo 一律走 Commons API（`wb logo`），别去官网抓图。OpenAI 2025 字标最后的 "I" 就是一根竖条，不是被裁掉；Claude 星芒 SVG 边缘略锯齿，放大到 300 高以内看不出来。
-- 火山 TTS 偶尔只返回半段：`tts-volc.mjs` 按逐字数校验自动重试；全量重配 `FORCE_TTS=1`。缓存键含文本+音色+语速，改语速会全部重配。
-- 字幕文本必须用原文，TTS 词会把 `@grok` 写成 `atgrok`；字幕时间来自 TTS 逐字时间戳，改旁白必须重跑 tts。
+- `tts-bailian.mjs` 按句请求、失败自动重试 3 次；句子音频按模型+音色+文本缓存在 `work/audio/cache/`，改语速只重算变速不重新请求；全量重配 `FORCE_TTS=1`。
+- 字幕文本必须用原文，TTS 词会把 `@grok` 写成 `atgrok`；千问不返回逐字时间戳，字幕时间是句子真实时长内按字数均分，改旁白必须重跑 tts。
 - SVG dash 在每个子路径 `M` 处重起，rough.js 又双描边：整条 path 一起 dashoffset 会"所有边同时长、每边描两遍"。渲染器已按子路径拆节点、双描边拆 A/B 层，别回退。
 - rough.js `toPaths` 不带 dasharray，虚线在 `render.html` 手动设。
 - 文本宽度是估算值，居中用 `align:'center'` 才准；左对齐长文本别超 1920。

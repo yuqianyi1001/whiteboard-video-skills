@@ -22,7 +22,7 @@
 
 ```
 选题 → 查证（数字进 README）→ 写旁白（按 | 切段）→ 出 Logo 与贴纸 → 画场景（逐段静帧检查）
-    → 火山 TTS 配音（逐字时间戳对字幕）→ 浏览器里逐笔渲染 → 混配乐 → 封面 → 发布文案
+    → 千问 TTS 配音（按句合成、句内按字数对字幕）→ 浏览器里逐笔渲染 → 混配乐 → 封面 → 发布文案
 ```
 
 | 环节 | 用什么 |
@@ -31,7 +31,7 @@
 | 逐笔动画 | Playwright 在 Chromium 里逐帧截图，4 路并行，2.5 分钟的片子渲染约 35 秒 |
 | 人物、道具贴纸 | 本地 [codex](https://github.com/openai/codex) CLI 生图，一次 2×2 四宫格，自动抠白底、去杂点 |
 | 公司、产品 Logo | Wikimedia Commons 官方 SVG，出处自动记录 |
-| 配音与字幕 | 火山引擎语音合成（官方音色或你自己的声音复刻），原生 1.2 倍语速，返回的逐字时间戳直接对字幕 |
+| 配音与字幕 | 阿里云百炼千问 Qwen-TTS（官方音色或你自己的声音复刻），按句合成，1.1 倍不变调变速、全期统一响度，句子真实时长内按字数均分对字幕 |
 | 合成 | ffmpeg：拼帧、烧字幕、说话时自动压低配乐 |
 
 几条写死在 skill 里的规矩：
@@ -52,7 +52,7 @@
 | `bin/wb` | 命令行：`new` `scenes` `stills` `image` `logo` `tts` `render` `mix` `cover` `build` `clean` |
 | `lib/scene-dsl.js` | 场景 DSL：一行代码一个元素，导出 Excalidraw 场景图、旁白稿、封面 |
 | `lib/render.html` `lib/render.js` | 逐笔渲染器：子路径顺序描边、双描边 A/B 层、按字数排期、铅笔跟随、并行出帧 |
-| `lib/tts-volc.mjs` `lib/tts/` | 火山 TTS，带缓存与半段音频自动重试 |
+| `lib/tts-bailian.mjs` | 千问 TTS，按句缓存、失败重试、变速与响度标准化 |
 | `lib/captions.cjs` | 逐字时间戳切 6~20 字短句，烧录并导出 SRT |
 | `lib/gen-image.mjs` | codex 生图贴纸 + 抠图 |
 | `lib/fetch-logo.mjs` | Wikimedia Commons 官方 Logo，`--vs` 拼对比封面图 |
@@ -69,7 +69,7 @@
 | ffmpeg | `brew install ffmpeg` |
 | Playwright Chromium | `npm install` 会自动装 |
 | codex CLI | 只有出贴纸（`wb image`）用到，登录后走你自己的额度 |
-| 火山引擎账号 | 开通语音合成，凭证填 `.env`；想用自己的声音就在控制台做一次声音复刻 |
+| 阿里云百炼账号 | 开通千问 TTS，API Key 填 `.env`；想用自己的声音就做一次千问声音复刻 |
 
 macOS 上实测。Linux 应该能跑，`wb open` 用的 `open` 命令除外。
 
@@ -79,7 +79,7 @@ macOS 上实测。Linux 应该能跑，`wb open` 用的 `open` 命令除外。
 git clone https://github.com/trustfuture/simon-skills.git
 cd simon-skills/skills/whiteboard-video
 npm install
-cp .env.example .env          # 填火山凭证和音色
+cp .env.example .env          # 填百炼 API Key、模型和音色
 
 # 先把示例渲染一遍，确认环境没问题
 mkdir -p episodes && cp -R examples/* episodes/
@@ -103,9 +103,10 @@ bin/wb build 计划                         # 出片
 ## 换成你的账号
 
 - **品牌**：`config.json` → `brand.name`（水印与片尾的手写名）、`brand.accent`（品牌色）、`brand.slogan`、`brand.endCard.cta`；有透明底 logo 就填 `brand.logo`。
-- **声音**：`.env` 的 `VOLC_TTS_VOICE`。官方 2.0 音色配 `VOLC_TTS_RESOURCE_ID=seed-tts-2.0`，声音复刻音色（`S_` 开头）配 `volc.megatts.default`。
+- **声音**：`.env` 的 `BAILIAN_TTS_VOICE`（官方音色如 `Cherry`，配 `BAILIAN_TTS_MODEL=qwen3-tts-flash`）；声音复刻音色填复刻得到的音色 ID，模型填复刻时对应的 `qwen3-tts-vc-*`。
 - **配乐**：仓库不附带音乐。放一首无版权音乐到 `assets/bgm.mp3`，或改 `config.json` 的 `bgm.file`；没有配乐就出无配乐成片。
 - **目录**：`config.json` → `dirs.projects` 可以指到你的 Obsidian 仓库里，每期文件夹就能在 Obsidian 里直接看、直接改场景图。
+- **在别的仓库里放期目录**：不想改本仓库的 `config.json`，就在自己的仓库放一份只写差异字段的 config（如 `dirs`、`brand`、`tts.pronunciation`），运行时 `WB_CONFIG=<那份 config.json> bin/wb build <期>`。它按字段覆盖默认配置，里面的相对路径以那份文件所在目录为准。
 - **封面标签**：`cover.seriesTag`。
 - **发布文案口吻与话题**：`references/publish.md`、`templates/发布.md`。
 

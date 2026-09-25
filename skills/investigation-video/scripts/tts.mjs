@@ -1,16 +1,19 @@
-// TTS 配音层 —— 只用火山引擎(豆包)语音合成大模型(音色由 .env VOLC_TTS_VOICE 指定, 当前擎苍)。每段旁白产出一个 wav, 返回真实时长。
+// TTS 配音层 —— 只用阿里云百炼千问 Qwen-TTS(模型/音色由 .env BAILIAN_TTS_MODEL / BAILIAN_TTS_VOICE 指定)。每段旁白产出一个 wav, 返回真实时长。
 // 时长很关键: 它决定每个分镜在时间轴上的长度(音画同步)。
-// 失败就抛错、不回退到别的引擎(保证音色一致); 火山 403 就去续授权/额度, 别拿其它声音顶替。
+// 失败就抛错、不回退到别的引擎(保证音色一致); 百炼报额度/鉴权错就去控制台处理, 别拿其它声音顶替。
 // 按正文、引擎、音色、参数与 WAV 内容指纹自动复用；FORCE_TTS=1 强制重配。
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { digest, ttsIdentity, readAudioCache, writeAudioCache } from "./lib/content-cache.mjs";
 
-// 火山 HTTP 单向接口: 一次性输入文本, 一个请求拿到完整音频(fetch 自动收齐分块, 我们无需流式)。
-// 文档: https://www.volcengine.com/docs/6561/1598757
-const VOLC_HTTP_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
+// 百炼多模态生成接口, SSE 流式: 音频以 base64 分片随响应返回(结果 OSS 链接的域名在云端环境里不一定放行)。
+// 请求走 curl(云端环境的出网代理对 curl 放行, Node 内置 fetch 会被拒)。
+// 文档: https://help.aliyun.com/zh/model-studio/qwen-tts
+const BAILIAN_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+const RATE = 24000, BPS = RATE * 2;            // 返回 24kHz 单声道 16bit PCM
+const SENTENCE_GAP = 0.12;                     // 句间静音秒数
+const isChar = (c) => /[\p{L}\p{N}]/u.test(c);
 
 export function getDuration(file) {
   const out = execFileSync("ffprobe", [
@@ -20,71 +23,51 @@ export function getDuration(file) {
   return parseFloat(out) || 0;
 }
 
-// mp3 → 44100/立体声 wav(对齐管线其余环节)
-function toWav(src, outWav) {
-  execFileSync("ffmpeg", ["-y", "-i", src, "-ar", "44100", "-ac", "2", outWav], { stdio: "ignore" });
+export function bailianConfig(voice, env = process.env) {
+  const model = env.BAILIAN_TTS_MODEL || "qwen3-tts-flash";
+  const speaker = voice || env.BAILIAN_TTS_VOICE;
+  if (!speaker) throw new Error("缺少千问音色: 在 .env 配 BAILIAN_TTS_VOICE(官方音色名或声音复刻音色 ID)");
+  const speed = Number(env.BAILIAN_TTS_SPEED || 1);  // 合成后 atempo 倍率, 1=原速
+  return { model, speaker, speed };
 }
 
-// 从环境变量拼鉴权头与音色(新版控制台 API Key / 旧版 AppId+Token 二选一)
-function volcConfig(voice) {
-  const resourceId = process.env.VOLC_TTS_RESOURCE_ID || "seed-tts-1.0";
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Api-Resource-Id": resourceId,
-    "X-Api-Connect-Id": randomUUID(),
-  };
-  if (process.env.VOLC_TTS_API_KEY) {
-    headers["X-Api-Key"] = process.env.VOLC_TTS_API_KEY;
-  } else if (process.env.VOLC_TTS_APP_ID && process.env.VOLC_TTS_ACCESS_TOKEN) {
-    headers["X-Api-App-Id"] = process.env.VOLC_TTS_APP_ID;
-    headers["X-Api-Access-Key"] = process.env.VOLC_TTS_ACCESS_TOKEN;
-  } else {
-    throw new Error("缺少火山凭证: 在 .env 配 VOLC_TTS_API_KEY(新版控制台) 或 VOLC_TTS_APP_ID+VOLC_TTS_ACCESS_TOKEN(旧版)");
-  }
-  // shotlist 的 voice 是 macOS 旧值(如 Tingting, 无下划线), 不是火山音色; 仅当像火山音色才采用。
-  const speaker = voice && voice.includes("_")
-    ? voice
-    : (process.env.VOLC_TTS_VOICE || "zh_female_shuangkuaisisi_moon_bigtts");
-  return { headers, speaker };
+function curlPost(data) {
+  const args = ["-sS", "-N", "--fail-with-body", "-m", "120", BAILIAN_URL, "--data-binary", "@-",
+    "-H", "Content-Type: application/json", "-H", "X-DashScope-SSE: enable"];
+  if (process.env.DASHSCOPE_API_KEY) args.push("-H", `Authorization: Bearer ${process.env.DASHSCOPE_API_KEY}`);
+  return new Promise((resolve, reject) => {
+    const p = execFile("curl", args, { maxBuffer: 64 << 20 }, (err, out) => (err ? reject(new Error(`${err.message.split("\n")[0]} ${String(out).slice(0, 200)}`)) : resolve(out)));
+    p.stdin.end(data);
+  });
 }
 
-// 火山流式响应是一串 JSON(每个含 base64 音频片段)。无论 NDJSON 还是 SSE(event:/data:)分隔,
-// 都用花括号配平扫出每个顶层 JSON 对象, 避免依赖具体换行/前缀格式。
-function extractJsonObjects(text) {
-  const objs = [];
-  let depth = 0, start = -1, inStr = false, esc = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') inStr = false;
-    } else if (c === '"') inStr = true;
-    else if (c === "{") { if (depth++ === 0) start = i; }
-    else if (c === "}") { if (--depth === 0 && start >= 0) { objs.push(text.slice(start, i + 1)); start = -1; } }
-  }
-  return objs;
-}
-
-// 递归收集逐字时间戳: 火山把它放在 sentence.words, 与音频分片穿插在同一串 JSON 里。
-// ⚠️别再丢掉它(2026-08-21 之前 collectAudio 只捞音频, 字幕只能按字数线性估时间 → 断句飘)。
-function collectWords(node, out) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node.words) && node.words.length) out.push(...node.words);
-  for (const v of Object.values(node)) if (v && typeof v === "object") collectWords(v, out);
-}
-
-// 递归收集音频: 取任意层级下 key 为 data/audio 的 base64 字符串(火山可能把音频包在 header/payload 内)。
-function collectAudio(node, out) {
-  if (!node || typeof node !== "object") return;
-  for (const [k, v] of Object.entries(node)) {
-    if ((k === "data" || k === "audio") && typeof v === "string" && v) out.push(Buffer.from(v, "base64"));
-    else if (v && typeof v === "object") collectAudio(v, out);
+// 合成一句, 返回原始 PCM; 失败重试 3 次
+async function synthSentence(text, model, voice) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const body = await curlPost(JSON.stringify({ model, input: { text, voice } }));
+      const chunks = [];
+      for (const line of body.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const j = JSON.parse(line.slice(5));
+        if (j.code) throw new Error(`${j.code} ${j.message}`);
+        const d = j.output?.audio?.data;
+        if (d) chunks.push(Buffer.from(d, "base64"));
+      }
+      let buf = Buffer.concat(chunks);
+      if (buf.subarray(0, 4).toString() === "RIFF") buf = buf.subarray(buf.indexOf("data") + 8);
+      if (buf.length < BPS * 0.2) throw new Error("音频过短");
+      return buf;
+    } catch (e) {
+      if (attempt >= 3) throw new Error(`千问 TTS 合成失败「${text}」: ${e.message}`);
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
   }
 }
 
-// 对一段文本生成配音, 返回 { path, duration }。**只用火山, 失败就抛错(不回退别的引擎)**。
-// REUSE_AUDIO 不再跳过内容校验；缓存命中同时恢复本次音频对应的 words。
+// 对一段文本生成配音, 返回 { path, duration, words }。**只用千问, 失败就抛错(不回退别的引擎)**。
+// 千问不返回逐字时间戳: 按句合成, 句子时长是真实的, 句内按字数均分, words 格式与字幕脚本约定一致
+// [{word,startTime,endTime}](秒, 标点并入前一个字)。
 export async function synthesize(text, outWav, { voice } = {}) {
   fs.mkdirSync(path.dirname(outWav), { recursive: true });
   const key = digest(ttsIdentity(text, voice));
@@ -92,70 +75,49 @@ export async function synthesize(text, outWav, { voice } = {}) {
   const cached = process.env.FORCE_TTS !== '1' && readAudioCache(outWav, key);
   if (cached) return cached;
   const remember = audio => { writeAudioCache(outWav, key, audio); return audio; };
-  // ⚠️ 占位通道(2026-09-05 火山全账号 403 时加): TTS_ENGINE=say 用 macOS say 出临时配音, 只为验版式/时间轴,
-  //   正式出片必须删掉 wav 换回火山重配。不带逐字时间戳(words=[])。
+  // ⚠️ 占位通道: TTS_ENGINE=say 用 macOS say 出临时配音, 只为验版式/时间轴,
+  //   正式出片必须删掉 wav 换回千问重配。不带逐字时间(words=[])。
   if (process.env.TTS_ENGINE === "say") {
-    const { execFileSync } = await import("node:child_process");
     const aiff = outWav.replace(/\.wav$/, ".aiff");
     execFileSync("say", ["-v", process.env.SAY_VOICE || "Tingting", "-r", process.env.SAY_RATE || "200", "-o", aiff, text]);
     execFileSync("ffmpeg", ["-nostdin", "-y", "-v", "error", "-i", aiff, "-ar", "24000", "-ac", "1", outWav]);
     fs.rmSync(aiff, { force: true });
     return remember({ path: outWav, duration: getDuration(outWav), words: [] });
   }
-  const { headers, speaker } = volcConfig(voice);
+  const { model, speaker, speed } = bailianConfig(voice);
 
-  // 逐字时间戳(sentence.words[{word,startTime,endTime,confidence}]), 两个开关都放 audio_params 里:
-  //   enable_timestamp → 仅 TTS 1.0 音色生效(字为 tn 后文本);
-  //   enable_subtitle  → TTS 2.0 / ICL 2.0 音色生效(字为原文, 以 TTSSubtitle 事件穿插返回, 可能晚于音频帧)。
-  // ⚠️2026-09-14 实测: seed-tts-2.0 + *_uranus_bigtts 只开 enable_timestamp 返回 words=[]; 加 enable_subtitle 后每字一条, 1.2 倍速也准。
-  //   官方文档 https://docs.volcengine.com/docs/6561/1598757 §2.4。有了它字幕对齐不再需要 whisper ASR。
-  const audioParams = { format: "mp3", sample_rate: 24000, bit_rate: 128000, enable_timestamp: true, enable_subtitle: true };
-  const speed = Number(process.env.VOLC_TTS_SPEED || 0); // [-50,100], 0=原速
-  if (speed) audioParams.speech_rate = speed;
-
-  // 2.0 音色的自然语言风格控制(VOLC_TTS_STYLE, 如"低沉沙哑的深夜电台女主播"):
-  // additions 必须是 JSON 序列化字符串, context_texts 只取第一条, 不计字符费。仅 *_uranus_bigtts 家族响应。
-  const reqParams = { text, speaker, audio_params: audioParams };
-  const style = process.env.VOLC_TTS_STYLE || "";
-  if (style) reqParams.additions = JSON.stringify({ context_texts: [style] });
-
-  const resp = await fetch(VOLC_HTTP_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      user: { uid: "investigation-video" },
-      req_params: reqParams,
-    }),
-  });
-  const raw = await resp.text();
-  if (!resp.ok) throw new Error(`火山 TTS HTTP ${resp.status}: ${raw.slice(0, 300)}`);
-
-  const chunks = [];
-  const words = [];
-  for (const objStr of extractJsonObjects(raw)) {
-    let o;
-    try { o = JSON.parse(objStr); } catch { continue; }
-    collectAudio(o, chunks);
-    collectWords(o, words);
+  const sentences = text.split(/(?<=[。？！；?!;])/).map((s) => s.trim()).filter((s) => [...s].some(isChar));
+  const parts = [], words = [];
+  let t = 0;
+  for (const [i, s] of sentences.entries()) {
+    if (i > 0) { parts.push(Buffer.alloc(Math.round(SENTENCE_GAP * RATE) * 2)); t += SENTENCE_GAP; }
+    const pcm = await synthSentence(s, model, speaker);
+    const dur = pcm.length / BPS;
+    const chars = [...s];
+    const n = chars.filter(isChar).length;
+    // 句首句尾各留一点静音余量，字在中间均分
+    const a = t + Math.min(0.1, dur * 0.05), step = (dur - Math.min(0.25, dur * 0.12)) / n;
+    let k = 0;
+    for (const c of chars) {
+      if (isChar(c)) { words.push({ word: c, startTime: (a + k * step) / speed, endTime: (a + (k + 1) * step) / speed }); k++; }
+      else if (words.length) words[words.length - 1].word += c;
+    }
+    parts.push(pcm); t += dur;
   }
-  if (!chunks.length) throw new Error("火山 TTS 未返回音频: " + raw.slice(0, 300));
-
-  const mp3 = outWav.replace(/\.wav$/, ".mp3");
-  fs.writeFileSync(mp3, Buffer.concat(chunks));
-  toWav(mp3, outWav);
-  fs.rmSync(mp3, { force: true });
-  // words: [{word,startTime,endTime,confidence}] — 逐字对齐, 给字幕分段/卡拉OK高亮用。
-  // ⚠️时间戳只描述「这一遍合成的音频」: 火山非确定性(同句两次时长实测差 0.07-0.24s),
-  //   拿它去套另一条已存在的 wav 会飘, 必须与音频同一次产出。
+  // PCM → 44100/立体声 wav(对齐管线其余环节); 变速用 atempo, 不变调
+  const af = speed !== 1 ? ["-af", `atempo=${speed}`] : [];
+  execFileSync("ffmpeg", ["-nostdin", "-y", "-v", "error", "-f", "s16le", "-ar", String(RATE), "-ac", "1", "-i", "-", ...af, "-ar", "44100", "-ac", "2", outWav],
+    { input: Buffer.concat(parts), maxBuffer: 256 << 20 });
+  for (const w of words) { w.startTime = +w.startTime.toFixed(3); w.endTime = +w.endTime.toFixed(3); }
   return remember({ path: outWav, duration: getDuration(outWav), words });
 }
 
-// CLI 自测凭证: node src/tts.mjs "要合成的文本" [输出.wav]
+// CLI 自测凭证: node scripts/tts.mjs "要合成的文本" [输出.wav]
 // (单跑时管线的 config.mjs 不会执行, 这里自己加载根目录 .env)
 if (import.meta.url === `file://${process.argv[1]}`) {
   try { process.loadEnvFile(path.resolve(import.meta.dirname, "../.env")); } catch { /* 无 .env 忽略 */ }
-  const text = process.argv[2] || "你好，我是火山引擎的语音合成服务。这是一段测试旁白。";
+  const text = process.argv[2] || "你好，我是千问语音合成服务。这是一段测试旁白。";
   const out = path.resolve(process.argv[3] || "tts-test.wav");
   const r = await synthesize(text, out, {});
-  console.log(`[tts] ✓ ${r.path}  时长 ${r.duration.toFixed(2)}s`);
+  console.log(`[tts] ✓ ${r.path}  时长 ${r.duration.toFixed(2)}s  字 ${r.words.length}`);
 }

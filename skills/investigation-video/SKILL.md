@@ -11,7 +11,7 @@ description: 制作或精修不露脸商业与消费调查视频，覆盖选题�
 
 - 用户要求学习对标的“画面／质感”时，围绕构图、素材合成、景深、边缘、字体、光影与动态制作展开；不要把交付转成选题、文案或叙事结构优化。
 - 延续已有选题、旁白、事实口径、画幅和已确认版本。视觉精修不等于重写稿件或更换音色；用户明确指出“没有钩子／重做开头”时，可在开头范围内改稿、重配音并检查正文衔接，保留原声线。
-- 新做完整长片时，以用户时长为准；本流程的账号目标为 **10 分钟以上**，可规划约 10–12 分钟，**且按账号默认 1.2 倍语速（火山 speech_rate=20）实测**，见[素材、事实与声音](references/editorial-and-materials.md)。样片通常 20–30 秒；不拿样片时长当长片要求，也不靠重复画面或放慢语音凑时长。
+- 新做完整长片时，以用户时长为准；本流程的账号目标为 **10 分钟以上**，可规划约 10–12 分钟，**且按账号默认 1.2 倍语速（千问 TTS，`BAILIAN_TTS_SPEED=1.2`）实测**，见[素材、事实与声音](references/editorial-and-materials.md)。样片通常 20–30 秒；不拿样片时长当长片要求，也不靠重复画面或放慢语音凑时长。
 - 本次认可样式为横屏 16:9。其他画幅按用户和当前工程适配，不因为旧技能默认 dock 而自动增加上下品牌带、章节和进度条。
 - 用户已认可方向就继续制作。只有更换主要视觉语言时，优先做一段动态样片验证；一般视觉样片覆盖实拍、证据与MG，开场样片按钩子需要编排，不强塞三种形式；不要每次常规修改都重新索要审批。
 
@@ -70,7 +70,7 @@ description: 制作或精修不露脸商业与消费调查视频，覆盖选题�
 
 ## 制作与交付
 
-使用 Remotion 帧动画，音轨由 FFmpeg 合成，**成片必须混入闪避配乐**（配方见 [管线手册](references/pipeline-playbook.md)）。字幕时间戳直接取火山 TTS 返回的逐字 `words`（2.0 音色须在 `audio_params` 传 `enable_subtitle: true`，`scripts/tts.mjs` 已默认打开），用 `scripts/subtitles-volc.py` 对齐；只有缺 words 的旧音频才回退 whisper。已有工程优先局部修改；先关键帧核对 Logo、字体、文字、素材，再整片渲染。依赖与路径查实际环境，不靠固定 localhost 端口判断当前项目。
+使用 Remotion 帧动画，音轨由 FFmpeg 合成，**成片必须混入闪避配乐**（配方见 [管线手册](references/pipeline-playbook.md)）。字幕时间取 `scripts/tts.mjs` 随音频产出的逐字 `words`（千问按句合成，句子时长真实、句内按字数均分），用 `scripts/subtitles.py` 对齐；只有缺 words 的旧音频才回退 whisper。已有工程优先局部修改；先关键帧核对 Logo、字体、文字、素材，再整片渲染。依赖与路径查实际环境，不靠固定 localhost 端口判断当前项目。
 
 完整成片片尾默认有简短点赞、收藏、关注CTA；结合本期价值，沿用已确认音色，重新核对新增字幕和总时长。
 
@@ -90,7 +90,7 @@ description: 制作或精修不露脸商业与消费调查视频，覆盖选题�
 - `assets/brand-stamp.py`：封面字标固定合成（右上角、22% 宽，与视频字标同几何）；生图不再画签名。
 - `assets/publishing-reference/八平台发布文案-模板.md` + `assets/check-publish-copy.py`：发布文案固定模板与校验，平台顺序、字段、章节、置顶评论都固定；文案写完必须校验通过。
 - `assets/finalize-outputs.py`：收尾固定生成 `outputs/<题名>-完整交付v<N>/`（成片/字幕/使用区间实体拷贝，文档与发布包软链到知识库），每期必须用它，不手工建 outputs。
-- `scripts/subtitles-volc.py`：字幕对齐脚本，优先用火山逐字时间戳，缺失回退 whisper；复制到工程 `work/production/` 使用。
+- `scripts/subtitles.py`：字幕对齐脚本，优先用 TTS 产出的逐字时间，缺失回退 whisper；复制到工程 `work/production/` 使用。
 - `assets/reference-project/`：仅作已认可案例参考，不能把案例正文、日期、金额当通用默认。
 - 样片压缩版 `assets/sample-preview.mp4`；最小 Remotion 参考工程在 `template/remotion/`。
 

@@ -5,8 +5,21 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+const expandFrom = (base, p) => { const e = p.replace(/^~/, process.env.HOME); return path.isAbsolute(e) ? e : path.join(base, e); };
+const expand = (p) => expandFrom(ROOT, p);
+const merge = (a, b) => { for (const [k, v] of Object.entries(b)) a[k] = v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object' ? merge(a[k], v) : v; return a; };
+
+// 环境变量 WB_CONFIG 指向另一份 config.json 时，按字段覆盖本仓库的默认配置（对象递归合并，数组整体替换），
+// 让别的仓库只放期目录和自己的品牌/配音参数、引用本仓库的工具。覆盖文件里的相对路径以覆盖文件所在目录为准。
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json')));
-const expand = (p) => { const e = p.replace(/^~/, process.env.HOME); return path.isAbsolute(e) ? e : path.join(ROOT, e); };
+if (process.env.WB_CONFIG) {
+  const file = path.resolve(process.env.WB_CONFIG), base = path.dirname(file);
+  const o = JSON.parse(fs.readFileSync(file));
+  for (const [sec, key] of [['dirs', 'projects'], ['dirs', 'build'], ['bgm', 'file'], ['brand', 'logo']]) {
+    if (o[sec]?.[key]) o[sec][key] = expandFrom(base, o[sec][key]);
+  }
+  merge(cfg, o);
+}
 const PROJECTS_DIR = expand(cfg.dirs.projects);
 const BUILD_DIR = expand(cfg.dirs.build);
 

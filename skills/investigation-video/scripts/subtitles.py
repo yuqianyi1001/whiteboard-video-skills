@@ -1,5 +1,5 @@
-# 字幕对齐：优先用火山 TTS 返回的字级时间戳(audio-manifest 里每句的 words)，没有 words 的句子回退到 asr/<id>.json(whisper)。
-# 用法: python3 subtitles-volc.py [manifest.json]   默认 audio-manifest-s20.json；输出 renderer/subtitles.json、subtitles.srt、alignment-audit.json
+# 字幕对齐：优先用 TTS 返回的逐字时间(audio-manifest 里每句的 words；千问按句真实时长、句内按字数均分)，没有 words 的句子回退到 asr/<id>.json(whisper)。
+# 用法: python3 subtitles.py [manifest.json]   默认 audio-manifest-s20.json；输出 renderer/subtitles.json、subtitles.srt、alignment-audit.json
 from pathlib import Path
 import json,re,sys
 p=Path(__file__).parent
@@ -16,7 +16,7 @@ def char_times_from_words(words):
 subs=[];audit=[]
 for x in t['scenes']:
  words=manifest.get(x['id'],{}).get('words') or []
- src='volc'
+ src='tts'
  if not words:
   r=json.loads((p/'asr'/f"{x['id']}.json").read_text());src='whisper'
   words=[w for seg in r['segments'] for w in seg.get('words',[])];words=[dict(word=w['word'],startTime=w['start'],endTime=w['end']) for w in words]
@@ -57,4 +57,4 @@ def tc(fr):
 (p/'subtitles.srt').write_text('\n\n'.join(f'{i+1}\n{tc(s["start"])} --> {tc(s["end"])}\n{s["text"]}' for i,s in enumerate(subs))+'\n')
 assert all(s['end']>s['start'] for s in subs)
 assert ''.join(normal(s['text']) for s in subs)==''.join(normal(x['text']) for x in t['scenes'])
-print('captions',len(subs),'volc',sum(a['source']=='volc' for a in audit),'whisper',sum(a['source']=='whisper' for a in audit),'maxEdit',max(a['editRate'] for a in audit))
+print('captions',len(subs),'tts',sum(a['source']=='tts' for a in audit),'whisper',sum(a['source']=='whisper' for a in audit),'maxEdit',max(a['editRate'] for a in audit))

@@ -17,12 +17,12 @@ work/
     screen/                     本片录屏（Playwright recordVideo）与其拼板
   production/
     sentences.json              由知识库口播稿正则生成，id sNNN / sNNNa
-    tts-s20.mjs                 火山合成，speech_rate=20；跳过已存在句
+    tts-s20.mjs                 千问合成，1.2 倍速；跳过已存在句
     audio-s20/<id>.wav|.json    单句音频与元数据（json 含 words 逐字时间戳）
     audio-manifest-s20.json     全部句子的时长与 words
     preview-*.mp3               无停顿拼接试听
     asr/ asr.py                 仅回退用（旧音频无 words 时）
-    subtitles-volc.py           字幕对齐（skill scripts 复制来）
+    subtitles.py                字幕对齐（skill scripts 复制来）
     design.py                   分镜：SRC 源表 → shots/cuts → timeline.json + 裁切
     clips.json                  裁切清单（源、起点、帧数）
     renderer/

@@ -39,10 +39,10 @@ done
 
 每个 skill 的环境和第一次跑通的步骤，看各自的 README：
 
-- [investigation-video/README.md](skills/investigation-video/README.md)：Node、Remotion（版本固定）、FFmpeg、Python，火山 TTS 凭证
-- [whiteboard-video/README.md](skills/whiteboard-video/README.md)：Node、FFmpeg、Playwright、codex CLI，火山 TTS 凭证；`bin/wb build` 一分钟跑出示例成片
+- [investigation-video/README.md](skills/investigation-video/README.md)：Node、Remotion（版本固定）、FFmpeg、Python，千问 TTS 凭证（阿里云百炼）
+- [whiteboard-video/README.md](skills/whiteboard-video/README.md)：Node、FFmpeg、Playwright、codex CLI，千问 TTS 凭证（阿里云百炼）；`bin/wb build` 一分钟跑出示例成片
 
-两个 skill 的配音都走火山引擎语音合成，凭证各放在自己目录的 `.env`，字段见各自的 `.env.example`。
+两个 skill 的配音都走阿里云百炼千问 Qwen-TTS，凭证各放在自己目录的 `.env`，字段见各自的 `.env.example`。
 
 ## 配套文章
 
