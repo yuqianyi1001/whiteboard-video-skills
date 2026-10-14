@@ -1,6 +1,7 @@
 // 旁白：阿里云百炼千问 Qwen-TTS（官方音色或声音复刻音色）。wb tts / wb build 走这里。
 // 配置在 config.json tts：model 留空读 BAILIAN_TTS_MODEL；voice 留空读 voiceEnv 指定的环境变量（默认 BAILIAN_TTS_VOICE）；
 //   API key 读 DASHSCOPE_API_KEY（云端环境由代理注入凭证时可不设）。环境变量也可以写在本目录 .env，字段见 .env.example。
+// qwen3-tts-* 走 multimodal-generation（SSE）；qwen-audio-*-tts-* 走 audio/tts/SpeechSynthesizer（非流式，下载结果 wav）。
 // 请求走 curl（云端环境的出网代理对 curl 放行，Node 内置 fetch 会被拒）。
 // 用 SSE 流式接口，音频以 base64 随响应返回（结果 OSS 链接的域名在云端环境里不一定放行）。
 // Qwen-TTS 不返回逐字时间戳：按句合成，句子时长是真实的，句内按字数均分，供字幕和画图节奏对齐。
@@ -26,6 +27,9 @@ const MODEL = B.model || process.env.BAILIAN_TTS_MODEL;
 const VOICE = B.voice || process.env[VOICE_ENV];
 if (!MODEL || !VOICE) throw new Error(`缺少千问 TTS 模型或音色：设 BAILIAN_TTS_MODEL 与 ${VOICE_ENV}（或 config.json tts.model / tts.voice）`);
 const URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+// qwen-audio-*（Qwen-Audio-TTS，声音复刻用 voice-enrollment 建音色）走 SpeechSynthesizer 接口：非流式，返回结果 wav 的 OSS 链接
+const SYN_URL = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer";
+const SYNTHESIZER = /^qwen-audio-/.test(MODEL);
 const FIXES = B.pronunciation || [];          // [["原词", "同音替换"], ...]，只改送给 TTS 的文本，字幕仍用原文
 const GAP = B.sentenceGap ?? 0.12, BEAT_GAP = B.beatGap ?? 0.3, PAR = B.parallel || 4;
 const SPEED = B.speed || 1, LUFS = B.loudness ?? null, TP = B.truePeak ?? -1.5;
@@ -40,6 +44,11 @@ fs.mkdirSync(cacheDir, { recursive: true });
 const fix = (t) => FIXES.reduce((s, [a, b]) => s.split(a).join(b), t);
 const splitSentences = (seg) => seg.split(/(?<=[。？！；])/).map((s) => s.trim()).filter((s) => /[\p{L}\p{N}]/u.test(s));
 
+function curlGet(url) {
+  return new Promise((resolve, reject) => execFile("curl", ["-sS", "--fail", "-m", "120", url.replace(/^http:/, "https:")], { encoding: "buffer", maxBuffer: 64 << 20 },
+    (err, out) => (err ? reject(new Error(`下载音频失败：${err.message.split("\n")[0]}`)) : resolve(out))));
+}
+
 function curlPost(url, headers, data) {
   const args = ["-sS", "-N", "--fail-with-body", "-m", "120", url, "--data-binary", "@-"];
   for (const [k, v] of Object.entries(headers)) args.push("-H", `${k}: ${v}`);
@@ -53,10 +62,21 @@ async function synth(text) {
   const key = crypto.createHash("sha1").update([MODEL, VOICE, text].join("\n")).digest("hex");
   const file = path.join(cacheDir, key + ".pcm");
   if (fs.existsSync(file) && process.env.FORCE_TTS !== "1") return fs.readFileSync(file);
-  const headers = { "Content-Type": "application/json", "X-DashScope-SSE": "enable" };
+  const headers = { "Content-Type": "application/json", ...(SYNTHESIZER ? {} : { "X-DashScope-SSE": "enable" }) };
   if (process.env.DASHSCOPE_API_KEY) headers.Authorization = `Bearer ${process.env.DASHSCOPE_API_KEY}`;
   for (let attempt = 1; ; attempt++) {
     try {
+      if (SYNTHESIZER) {
+        const j = JSON.parse(await curlPost(SYN_URL, headers, JSON.stringify({ model: MODEL, input: { text, voice: VOICE, format: "wav", sample_rate: RATE } })));
+        if (j.code) throw new Error(`${j.code} ${j.message}`);
+        const u = j.output?.audio?.url;
+        if (!u) throw new Error("响应里没有音频链接");
+        let buf = await curlGet(u);
+        if (buf.subarray(0, 4).toString() === "RIFF") buf = buf.subarray(buf.indexOf("data") + 8);
+        if (buf.length < BPS * 0.2) throw new Error("音频过短");
+        fs.writeFileSync(file, buf);
+        return buf;
+      }
       const body = await curlPost(URL, headers, JSON.stringify({ model: MODEL, input: { text, voice: VOICE } }));
       const chunks = [];
       for (const line of body.split("\n")) {
