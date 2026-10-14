@@ -11,7 +11,7 @@ description: 手绘白板风"边画边讲"讲解视频出片 skill（Excalidraw 
 
 ## 硬规矩
 
-1. **全链路本地。** 旁白走阿里云百炼千问 Qwen-TTS（凭证在 `<仓库>/.env`，音色可以是官方音色或你自己的声音复刻），按句合成后默认 1.1 倍不变调变速、全期统一响度；贴纸走本地 `codex` CLI 生图；真实 Logo 走 Wikimedia Commons 官方 SVG（`wb logo`）；配乐放 `assets/bgm.mp3`，没有就出无配乐成片。改配置不改代码。
+1. **全链路本地。** 旁白走阿里云百炼 Qwen-Audio-TTS（`qwen-audio-*` 模型，凭证在 `<仓库>/.env`，音色是你自己的声音复刻），按句合成后默认 1.1 倍不变调变速、全期统一响度；贴纸走本地 `codex` CLI 生图；真实 Logo 走 Wikimedia Commons 官方 SVG（`wb logo`）；配乐放 `assets/bgm.mp3`，没有就出无配乐成片。改配置不改代码。
 2. **一处为主。** 期目录就是工程目录，`scenes.js` 是唯一手写源（旁白、场景、封面都在里面）；`scenes/`、`旁白稿.md`、`字幕.srt`、`封面-*.png` 是生成物，不手改、不外拷。`README.md`（资料来源）和 `发布.md`（文案）是人写的。视频不放进期目录：成片在 `<dirs.build>/<期>/outputs/final.mp4`，中间产物在同目录 `work/`，`旁白稿.md` 里自动带成片链接。
 3. **先旁白后画面。** 旁白按 `|` 切 beat，每 beat 3~4 句配一组元素；6~8 个场景，成片 2~2.5 分钟（约 500~600 字）。
 4. **画布 1920×1080。y≥960 是字幕区，右上 320×130 是水印区**，元素不进去；`wb scenes` 的 ⚠ 必须清零。
@@ -89,13 +89,13 @@ $W build "<标题>"                        # scenes → tts → render → mix �
 | 封面文案 / 贴纸 / 画幅 | `scenes.js` 末尾 cover 函数 → `wb cover`；画幅 config `cover.ratios`，标签 `cover.seriesTag`（`tag: ''` 去掉） |
 | 标题 / 发布文案 / 换平台 | 改 `发布.md`，不用重出片 |
 | 在 Obsidian 里改了图 | `wb render && wb mix` 直接读 `.excalidraw.md`；增删元素会改逐笔顺序，结构性改动回 `scenes.js` |
-| 换声线 / 换曲 | `.env` 的 `BAILIAN_TTS_VOICE` 或 config `tts.voice`（声音复刻音色要配复刻时对应的 `qwen3-tts-vc-*` 模型，填 `BAILIAN_TTS_MODEL` 或 `tts.model`）；多音字读错用 `tts.pronunciation` 同音替换/ `assets/bgm.mp3`（换曲先 volumedetect 量电平再定 gain） |
+| 换声线 / 换曲 | `.env` 的 `BAILIAN_TTS_VOICE` 或 config `tts.voice`（声音复刻音色要配复刻时的 target_model，如 `qwen-audio-3.0-tts-plus`，填 `BAILIAN_TTS_MODEL` 或 `tts.model`）；多音字读错用 `tts.pronunciation` 同音替换/ `assets/bgm.mp3`（换曲先 volumedetect 量电平再定 gain） |
 | 换账号品牌 | config `brand.name/accent/slogan`，其余不动 |
 
 ## 已知坑
 
 - Logo：很多官网有验证页拦截，Logo 一律走 Commons API（`wb logo`），别去官网抓图。OpenAI 2025 字标最后的 "I" 就是一根竖条，不是被裁掉；Claude 星芒 SVG 边缘略锯齿，放大到 300 高以内看不出来。
-- `tts-bailian.mjs` 按句请求、失败自动重试 3 次；句子音频按模型+音色+文本缓存在 `work/audio/cache/`，改语速只重算变速不重新请求；全量重配 `FORCE_TTS=1`。
+- `tts-bailian.mjs` 走 `audio/tts/SpeechSynthesizer`，按句请求、失败自动重试 3 次；句子音频按模型+音色+文本缓存在 `work/audio/cache/`，改语速只重算变速不重新请求；全量重配 `FORCE_TTS=1`。
 - 字幕文本必须用原文，TTS 词会把 `@grok` 写成 `atgrok`；千问不返回逐字时间戳，字幕时间是句子真实时长内按字数均分，改旁白必须重跑 tts。
 - SVG dash 在每个子路径 `M` 处重起，rough.js 又双描边：整条 path 一起 dashoffset 会"所有边同时长、每边描两遍"。渲染器已按子路径拆节点、双描边拆 A/B 层，别回退。
 - rough.js `toPaths` 不带 dasharray，虚线在 `render.html` 手动设。
