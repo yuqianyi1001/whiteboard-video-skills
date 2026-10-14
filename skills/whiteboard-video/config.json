@@ -15,7 +15,7 @@
     "beatGap": 0.3,
     "parallel": 4,
     "pronunciation": [],
-    "_note": "旁白用阿里云百炼千问 Qwen-TTS（lib/tts-bailian.mjs）。model 留空读 .env 的 BAILIAN_TTS_MODEL（如 qwen3-tts-flash；声音复刻音色要配对应的 qwen3-tts-vc-* 模型）；voice 留空读 voiceEnv 指定的环境变量（默认 BAILIAN_TTS_VOICE）；API key 读 DASHSCOPE_API_KEY。speed=合成后 atempo 变速倍率（不变调，改了按新倍率重算）；loudness=目标响度 LUFS，全期统一增益，truePeak=限幅 dBTP；sentenceGap/beatGap=句间/段间静音秒数；parallel=并发请求数；pronunciation=多音字同音替换 [[\"原词\",\"替换\"],...]，只改送 TTS 的文本，字幕仍用原文"
+    "_note": "旁白用阿里云百炼 Qwen-Audio-TTS（lib/tts-bailian.mjs，audio/tts/SpeechSynthesizer 接口）。model 留空读 .env 的 BAILIAN_TTS_MODEL（qwen-audio-* 模型，如 qwen-audio-3.0-tts-plus，要和复刻音色时的 target_model 一致）；voice 留空读 voiceEnv 指定的环境变量（默认 BAILIAN_TTS_VOICE）；API key 读 DASHSCOPE_API_KEY。speed=合成后 atempo 变速倍率（不变调，改了按新倍率重算）；loudness=目标响度 LUFS，全期统一增益，truePeak=限幅 dBTP；sentenceGap/beatGap=句间/段间静音秒数；parallel=并发请求数；pronunciation=多音字同音替换 [[\"原词\",\"替换\"],...]，只改送 TTS 的文本，字幕仍用原文"
   },
   "bgm": {
     "file": "assets/bgm.mp3",
